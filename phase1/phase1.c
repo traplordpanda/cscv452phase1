@@ -28,6 +28,7 @@ int debugflag = 1;
 proc_struct ProcTable[MAXPROC];
 
 /* Process lists  */
+proc_ptr ReadyList;
 
 /* current process ID */
 proc_ptr Current;
@@ -51,9 +52,21 @@ void startup()
    int result; /* value returned by call to fork1() */
 
    /* initialize the process table */
-   if (DEBUG && debugflag){
-      USLOSS_Console("startup(): initilizing process table, ProcTable[]\n");
+   if (DEBUG && debugflag)
+      USLOSS_Console("startup(): initilizing process table, ProcTable[] \n");
+   
+   //init all procTables 
+   for (i=0; i < MAXPROC; i++){
+      ProcTable[i].next_proc_ptr = NULL;
+      ProcTable[i].child_proc_ptr = NULL;
+      ProcTable[i].next_sibling_ptr = NULL;
+      ProcTable[i].name = '\0';
+      ProcTable[i].start_arg = '\0';
+      ProcTable[i].pid = -1;
+      ProcTable[i].priority = -1;
+      ProcTable[i].start_func = NULL;
    }
+
 
    /* Initialize the Ready list, etc. */
    if (DEBUG && debugflag)

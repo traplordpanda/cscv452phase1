@@ -40,23 +40,23 @@
  * Function prototypes for this phase.
  */
 
-extern  int             fork1(char *name, int(*func)(char *), char *arg, 
+extern  int		fork1(char *name, int(*func)(char *), char *arg, 
 			    int stacksize, int priority);
 extern	int		join(int *status);
-extern	void		quit(int status);
+extern	void	quit(int status);
 extern  int		zap(int pid);
 extern  int		is_zapped(void);
 extern	int		getpid(void);
-extern	void		dump_processes(void);
-extern  int             block_me(int block_status);
-extern  int             unblock_proc(int pid);
-extern  int             read_cur_start_time(void);
-extern  void            time_slice(void);
-extern  void            dispatcher(void);
+extern	void	dump_processes(void);
+extern  int		block_me(int block_status);
+extern  int		unblock_proc(int pid);
+extern  int		read_cur_start_time(void);
+extern  void	time_slice(void);
+extern  void	dispatcher(void);
 extern	int		readtime(void);
 
-extern	void		p1_fork(int pid);
-extern	void		p1_quit(int pid);
-extern	void		p1_switch(int old, int new);
+extern	void	p1_fork(int pid);
+extern	void	p1_quit(int pid);
+extern	void	p1_switch(int old, int new);
 
 #endif /* _PHASE1_H */
