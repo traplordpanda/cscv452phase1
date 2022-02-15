@@ -51,6 +51,9 @@ void startup()
    int result; /* value returned by call to fork1() */
 
    /* initialize the process table */
+   if (DEBUG && debugflag){
+      USLOSS_Console("startup(): initilizing process table, ProcTable[]\n");
+   }
 
    /* Initialize the Ready list, etc. */
    if (DEBUG && debugflag)
