@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <phase1.h>
 #include "kernel.h"
+#include "usloss.h"
 
 /* ------------------------- Prototypes ----------------------------------- */
 int sentinel (char *);
@@ -53,18 +54,19 @@ void startup()
 
    /* initialize the process table */
    if (DEBUG && debugflag)
-      USLOSS_Console("startup(): initilizing process table, ProcTable[] \n");
+      console("startup(): initilizing process table, ProcTable[] \n");
    
    //init all procTables 
    for (i=0; i < MAXPROC; i++){
       ProcTable[i].next_proc_ptr = NULL;
       ProcTable[i].child_proc_ptr = NULL;
       ProcTable[i].next_sibling_ptr = NULL;
-      ProcTable[i].name = '\0';
-      ProcTable[i].start_arg = '\0';
+      strcpy(ProcTable[i].name, " ");
+      ProcTable[i].start_arg[0] = '\0';
       ProcTable[i].pid = -1;
       ProcTable[i].priority = -1;
       ProcTable[i].start_func = NULL;
+      ProcTable[i].status = EMPTY;
    }
 
 
@@ -134,10 +136,31 @@ int fork1(char *name, int (*f)(char *), char *arg, int stacksize, int priority)
       console("fork1(): creating process %s\n", name);
 
    /* test if in kernel mode; halt if in user mode */
+   if ((PSR_CURRENT_MODE & psr_get()) == 0){
+      console("fork is currently in user mode, halting\n");
+      halt(1);
+   }
 
    /* Return if stack size is too small */
+   if (stacksize < USLOSS_MIN_STACK){
+      console("stack size is too small\n");
+      return -2;
+   }
 
    /* find an empty slot in the process table */
+   for (int i=0; i <= MAXPROC; i++){
+      if (ProcTable[i].status == EMPTY){
+         proc_slot = i;
+      }
+      if (i >= MAXPROC){
+         enableInterrupts();
+         if (DEBUG && debugflag){
+            console("fork func Process table is full\n");
+            return -1;
+         }
+      }
+   } 
+
 
    /* fill-in entry in process table */
    if ( strlen(name) >= (MAXNAME - 1) ) {
@@ -183,7 +206,7 @@ void launch()
       console("launch(): started\n");
 
    /* Enable interrupts */
-   //TODO enableInterrupts();
+   enableInterrupts();
 
    /* Call the function passed to fork1, and capture its return value */
    result = Current->start_func(Current->start_arg);
@@ -289,3 +312,14 @@ void disableInterrupts()
     /* We ARE in kernel mode */
     psr_set( psr_get() & ~PSR_CURRENT_INT );
 } /* disableInterrupts */
+
+/*
+ * Enables interrupts
+ */
+void enableInterrupts(){
+   if((PSR_CURRENT_MODE & psr_get()) ==0){
+      console("Not in kernel mode\n");
+      halt(1);
+   }else
+      psr_set(psr_get() | PSR_CURRENT_INT);
+}

@@ -10,7 +10,7 @@ struct proc_struct {
    proc_ptr       next_sibling_ptr;
    char           name[MAXNAME];     /* process's name */
    char           start_arg[MAXARG]; /* args passed to process */
-   context        state;             /* current context for process */
+   int        state;             /* current context for process */
    short          pid;               /* process id */
    int            priority;
    int (* start_func) (char *);   /* function where process begins -- launch */
@@ -18,6 +18,7 @@ struct proc_struct {
    unsigned int   stacksize;
    int            status;         /* READY, BLOCKED, QUIT, etc. */
    /* other fields as needed... */
+
 };
 
 struct psr_bits {
@@ -40,3 +41,13 @@ union psr_values {
 #define SENTINELPID 1
 #define SENTINELPRIORITY LOWEST_PRIORITY
 
+/* Process state definitions */
+#define EMPTY     -1
+#define READY     0
+#define RUNNING   1
+#define BLOCKED   2
+#define ZAPPED    3
+#define QUIT      4
+#define FINISHED  5
+
+#define TIMESLICE 80000
