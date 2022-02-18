@@ -22,6 +22,7 @@ struct proc_struct {
    int            startTime;
    int            CPUtime;
    int            zapped;
+   int            quitCode;
 
    /* other fields as needed... */
 

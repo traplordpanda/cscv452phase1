@@ -15,7 +15,7 @@ int start1(char *arg)
   printf("start1(): after fork of child %d\n", pid1);
   printf("start1(): performing join\n");
   kidpid = join(&status);
-  sprintf(buf,"start1(): exit status for child %d is %d\n", kidpid, status); 
+  sprintf(buf,"start1(): exit status for child %d is %d\n",  kidpid, status); 
   printf("%s", buf);
   quit(0);
   return 0; /* so gcc will not complain about its absence... */

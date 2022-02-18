@@ -21,6 +21,7 @@ static void enableInterrupts();
 static void check_deadlock();
 static void insertReadyList(proc_ptr proc);
 static void removeFromReadyList(int PID);
+proc_ptr find_process(int pid);
 
 
 /* -------------------------- Globals ------------------------------------- */
@@ -55,14 +56,14 @@ int numProc;
    Returns - nothing
    Side Effects - lots, starts the whole thing
    ----------------------------------------------------------------------- */
-void startup()
-{
+void startup(){
    int i;      /* loop index */
    int result; /* value returned by call to fork1() */
 
    /* initialize the process table */
-   //if (DEBUG && debugflag)
+   if (DEBUG && debugflag){
       console("startup(): initilizing process table, ProcTable[] \n");
+   }
    
    //init all procTables 
    for (i=0; i < MAXPROC; i++){
@@ -71,9 +72,6 @@ void startup()
       ProcTable[i].next_proc_ptr = NULL;
       ProcTable[i].child_proc_ptr = NULL;
       ProcTable[i].next_sibling_ptr = NULL;
-      ProcTable[i].parent_pid = NULL;
-      strcpy(ProcTable[i].name, " ");
-      ProcTable[i].start_arg[0] = '\0';
    }
 
    /*init trackers readylist etc*/
@@ -147,11 +145,12 @@ void finish()
 int fork1(char *name, int (*f)(char *), 
           char *arg, int stacksize, int priority)
 {
-   int proc_slot;
+   int proc_slot = 1;
    proc_ptr temp_proc;
 
-   if (debugflag)
+   if (debugflag && DEBUG){
       console("fork1(): creating process %s\n", name);
+   }
 
    /* test if in kernel mode; halt if in user mode */
    if ((PSR_CURRENT_MODE & psr_get())==0){
@@ -166,20 +165,18 @@ int fork1(char *name, int (*f)(char *),
    }
 
    /* find an empty slot in the process table */
-   for (int i=0; i <= MAXPROC; i++){
-      if (ProcTable[i].status == EMPTY){
-         proc_slot = i;
-         break;
-      }
+   while ((ProcTable[proc_slot].pid != -1) && (proc_slot < MAXPROC)){
+      proc_slot +=1;
+   }
+   
    //return -1 if none found
-      if (i >= MAXPROC){
+      if (proc_slot >= MAXPROC){
          enableInterrupts();
          if (DEBUG && debugflag){
             console("fork func Process table is full\n");  
          }
          return -1;
       }
-   } 
 
    /*check if sentinel*/
    if(strcmp(name, "sentinel")){
@@ -236,9 +233,33 @@ int fork1(char *name, int (*f)(char *),
                 ProcTable[proc_slot].stack, 
                 ProcTable[proc_slot].stacksize, launch);
 
+   /*update readylist*/
+   temp_proc = ReadyList[priority];
+
+   if (ReadyList[priority]== NULL){
+      ReadyList[priority] = &ProcTable[proc_slot];
+   }else{
+      while(temp_proc != NULL){
+         temp_proc = temp_proc->next_proc_ptr;
+         temp_proc = &ProcTable[proc_slot];
+      }
+   }
+   /*update current*/
+   if(Current !=NULL){
+      Current -> child_proc_ptr = &ProcTable[proc_slot];
+      Current -> childrenCount += 1;
+   }
+
    /* for future phase(s) */
    p1_fork(ProcTable[proc_slot].pid);
-   return 0;
+   
+   /*if not sentinel call dispatcher*/
+   if(strcmp(name, "sentinel")){
+      dispatcher();
+   }
+   enableInterrupts();
+   numProc += 1;
+   return ProcTable[proc_slot].pid;
 } /* fork1 */
 
 /* ------------------------------------------------------------------------
@@ -284,23 +305,143 @@ void launch()
    ------------------------------------------------------------------------ */
 int join(int *code)
 {
-   return 0;
-} /* join */
+   int child_pid = -1;
+   proc_ptr join_temp;
+
+   if (DEBUG && debugflag)
+      console(" - join(): called -\n");
+
+   /*Check kernel mode*/
+   if((PSR_CURRENT_MODE & psr_get()) == 0){
+      //not in kernel mode
+      if (debugflag && DEBUG){
+         console("join() Kernel Error: Not in kernel mode\n");
+      }
+      halt(1);
+   }
+
+ /* disbale interrupts */
+   disableInterrupts();
+
+ /* check if current process has children */
+   if (!Current->childrenCount)
+   {
+    /* enable interrupts */
+      enableInterrupts();
+      if(DEBUG && debugflag)
+        console(" - join(): current process has no children -\n");
+      return (-2);
+   }
+
+ /* check if current process has been zapped */
+   if (Current->status == ZAPPED)
+   {
+    /* enable interrupts */
+      enableInterrupts();
+      if(DEBUG && debugflag)
+        console(" - join(): current process has been zapped -\n");
+      return (-1);
+   }
+
+ /* check if current process has children in QuitList */
+    if(Current->status == QUIT)
+    {
+        console("Current status set to quit");
+        child_pid = Current->pid;
+    }
+
+   //join_temp = Current->child_proc_ptr;
+   while (child_pid == -1){
+      join_temp = Current->child_proc_ptr;
+      while (join_temp != NULL){
+         if(join_temp->status == QUIT){
+             child_pid = join_temp->pid;
+         }
+         join_temp = join_temp->next_sibling_ptr;
+      }
+      if (child_pid == -1){
+         Current->status = BLOCKED;
+         dispatcher();
+      }
+  }
 
 
-/* ------------------------------------------------------------------------
-   Name - quit
-   Purpose - Stops the child process and notifies the parent of the death by
-             putting child quit info on the parents child completion code
-             list.
-   Parameters - the code to return to the grieving parent
-   Returns - nothing
-   Side Effects - changes the parent of pid child completion status list.
-   ------------------------------------------------------------------------ */
-void quit(int code)
+ /* stores passed quit code */
+   *code = find_process(child_pid)->quitCode;
+
+ /* enable interrupts */
+   enableInterrupts();
+   return child_pid;
+}/* join */
+
+
+
+/*----------------------------------------------------------------*
+ * Name        : quit                                             *
+ * Purpose     : Terminates the current process and returns the   *
+ *               status to a join by its parent. If the current   *
+ *               process has children instead prints appropriate  *
+ *               error message and halts the program.             *
+ * Parameters  : the code to return to the grieving parent        *
+ * Returns     : nothing                                          *
+ * Side Effects: changes the parent of pid child completion       *
+ *               status list.                                     *
+ *----------------------------------------------------------------*/
+void quit(int status)
 {
+   if (DEBUG && debugflag)
+      console(" - quit(): started -\n");
+
+ /*Check kernel mode*/
+   if((PSR_CURRENT_MODE & psr_get()) == 0){
+      //not in kernel mode
+      if (debugflag && DEBUG){
+         console("Dispatcher Kernel Error: Not in kernel mode\n");
+      }
+      halt(1);
+   }
+
+ /* disbale interrupts */
+   disableInterrupts();
+
+ /* checks if current process has any children */
+   if (Current->childrenCount != 0)
+   {
+       if(DEBUG && debugflag)
+            console(" - quit(): current process has children and cannot quit. Halting... -\n");
+      halt(1);
+   }
+
+ /* sets status of current process to quit */
+
+   Current->status = QUIT;
+   Current->quitCode = status;
+   ReadyList[Current->priority--] = NULL;
+   Current->quitCode = status;
+
+ /* deals with the parent process */
+   if (Current->parent_pid)
+   {
+      proc_ptr parent_ptr = find_process(Current->parent_pid);
+      parent_ptr->childrenCount--;
+      parent_ptr->status = READY;
+      //parent_ptr->child_proc_ptr = NULL;
+      //empty_proc(parent_ptr->child_proc_ptr);
+   }
+   else
+   {
+       clearProc(Current->pid);
+   }
+ /* for future phase(s) */
    p1_quit(Current->pid);
-} /* quit */
+ /* enable interrupts */
+   enableInterrupts();
+
+ /* goes to dispatcher to decide who runs next */
+   dispatcher();
+
+}/* quit */
+
 
 
 /* ------------------------------------------------------------------------
@@ -340,7 +481,7 @@ void dispatcher(void)
    /* Pick the next process to run */
    while ((i<MINPRIORITY) && (next_process == NULL)){
       temp = ReadyList[i];
-      while((temp !=NULL) && (next_process == NULL)){
+      while( (temp != NULL) && (next_process == NULL)){
          next_process = temp;
          temp = temp->next_proc_ptr;
       }
@@ -351,7 +492,6 @@ void dispatcher(void)
          BlockedList->status = READY;
          next_process = BlockedList;
          BlockedList = BlockedList->next_proc_ptr;
-      }
       /*update readyList*/
       temp = ReadyList[next_process->priority];
       if (ReadyList[next_process->priority]){
@@ -361,15 +501,18 @@ void dispatcher(void)
             temp = temp->next_proc_ptr;
          }
       }
-   }else{
-      next_process = &ProcTable[1];
+      }else{
+         next_process = &ProcTable[1];
+      }
    }
 
    /*TODO context switching*/
    if (Current == NULL){
       p1_switch(0, next_process->pid);
       Current = next_process;
-
+   if (debugflag){
+      console("dispatcher mode %d", psr_get());
+   }
       context_switch(NULL, &next_process->state);
    }
    p1_switch(Current->pid, next_process->pid);
@@ -381,34 +524,6 @@ void dispatcher(void)
    context_switch(&prev_process->state, &Current->state);
    enableInterrupts();
 
-
-   /*
-   if (prev_process == NULL){
-      next_process->status = RUNNING;
-      removeFromReadyList(next_process->pid);
-      if(debugflag && DEBUG){
-         console("dispatcher(): %s", next_process->name);
-      }
-      next_process->startTime = sys_clock();
-      context_switch(NULL, &next_process->state);      
-   }else if(prev_process->status == QUIT){
-      next_process->status = RUNNING;
-      removeFromReadyList(next_process->pid);
-      //prev_process->CPUtime = prev_process->CPUtime + readtime();
-      next_process->startTime = sys_clock();
-      context_switch(&prev_process->state, &next_process->state);
-   }
-   else{
-      next_process->status = RUNNING;
-      removeFromReadyList(next_process->pid);
-
-      //check if process is blocked, if not inster into readyList
-      if(prev_process->status != BLOCKED){
-         prev_process->status = READY;
-         insertReadyList(prev_process);
-      }
-   }
-*/
 }   /* dispatcher */
 
 
@@ -453,7 +568,7 @@ void disableInterrupts()
     halt(1);
   } else
     /* We ARE in kernel mode */
-    psr_set( psr_get() & PSR_CURRENT_INT);
+    psr_set( psr_get() & ~PSR_CURRENT_INT);
 } /* disableInterrupts */
 
 /*
@@ -530,3 +645,42 @@ static void removeFromReadyList(int PID)
    }
    return;
 } /* removeFromReadyList */
+
+/*----------------------------------------------------------------*
+ * Name        : find_process                                     *
+ * Purpose     : Finds process pointer of given PID               *
+ * Parameters  : PID to find                                      *
+ * Returns     : pointer of found process -or-                    *
+ *               NULL if none match                               *
+ * Side Effects: none                                             *
+ *----------------------------------------------------------------*/
+proc_ptr find_process(int pid)
+{
+   if (DEBUG && debugflag)
+      console("       - find_process(): seeking process %d -\n", pid);
+
+   int i = 1;
+   proc_ptr found_ptr = NULL;
+
+   while ( (i < MAXPROC) && (found_ptr == NULL) )
+   {
+      if (ProcTable[i].pid == pid)
+         found_ptr = &ProcTable[i];
+      i += 1;
+   }
+
+   return(found_ptr);
+}/* find_process */
+
+
+void clearProc(int pid){
+    disableInterrupts();
+    int i = pid %MAXPROC;
+    ProcTable[i].pid = EMPTY;
+    ProcTable[i].status = EMPTY;
+    ProcTable[i].next_proc_ptr = NULL;
+    ProcTable[i].child_proc_ptr = NULL;
+    ProcTable[i].next_sibling_ptr = NULL;
+    numProc--;
+    enableInterrupts();
+}
