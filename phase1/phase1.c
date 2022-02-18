@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------------
-   Kyle AuBuchon
+   Kyle AuBuchon & Juan Gonzalez
    phase1.c
    CSCV 452
    ------------------------------------------------------------------------ */
@@ -25,6 +25,7 @@ void dump_processes();
 static void kernelCheck(char * caller_name);
 static void enableInterrupts(char * caller_name);
 static void disableInterrupts(char * caller_name);
+int join(int * code);
  
 static void check_deadlock();
 int zap(int pid);
@@ -343,7 +344,7 @@ int join(int * code) {
   proc_ptr join_temp;
  
   if (DEBUG && debugflag)
-    console(" - join(): called -\n");
+    console("join(): called -\n");
  
   /* test if in kernel mode, halts otherwise */
   kernelCheck("join");
@@ -352,11 +353,11 @@ int join(int * code) {
   disableInterrupts("join");
  
   /* check if current process has children */
-  if (!Current -> childCount) {
+  if (Current -> childCount == 0) {
     /* enable interrupts */
     enableInterrupts("join");
     if (DEBUG && debugflag)
-      console(" - join(): current process has no children -\n");
+      console("join(): current process has no children -\n");
     return (-2);
   }
  
@@ -365,7 +366,7 @@ int join(int * code) {
     /* enable interrupts */
     enableInterrupts("join");
     if (DEBUG && debugflag)
-      console(" - join(): current process has been zapped -\n");
+      console("join(): current process has been zapped -\n");
     return (-1);
   }
  
@@ -531,7 +532,6 @@ void dispatcher(void) {
   Current = next_process;
   Current -> startTime = sys_clock();
  
-  enableInterrupts("dispatcher");
   context_switch( & prev_process -> state, & Current -> state);
  
   //Current->status = RUNNING;
