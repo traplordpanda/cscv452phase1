@@ -171,9 +171,7 @@ int fork1(char * name, int( * f)(char * ), char * arg, int stacksize, int priori
 
   /*check priority*/
   if ((next_pid != SENTINELPID) && (priority > MINPRIORITY || priority < MAXPRIORITY)) {
-    if (DEBUG && debugflag) {
-      console("fork1(): Process %s priority is out of bounds\n", name);
-    }
+
     return -1;
   }
 
@@ -187,9 +185,7 @@ int fork1(char * name, int( * f)(char * ), char * arg, int stacksize, int priori
   proc_slot = findProcSlot();
 
   if (proc_slot == -1) {
-    if (DEBUG && debugflag) {
-      console("fork1(): process table full\n");
-    }
+
     return -1;
   }
 
@@ -313,9 +309,7 @@ int join(int * code) {
     Current -> status = JOIN_BLOCK;
     popFromReadyList(Current);
 
-    if (DEBUG && debugflag) {
-      console("join(): %s is blocked.\n", Current -> name);
-    }
+
     dispatcher();
   }
 
@@ -344,9 +338,7 @@ int join(int * code) {
    Side Effects - changes the parent of pid child completion status list.
    ------------------------------------------------------------------------ */
 void quit(int code) {
-  if (DEBUG && debugflag){
-	  console("quit started\n");
-  }
+
   
   int curr_pid = -1;
   proc_ptr temp1;
@@ -434,9 +426,7 @@ void quit(int code) {
    Side Effects - the context of the machine is changed
    ----------------------------------------------------------------------- */
 void dispatcher(void) {
-  if (DEBUG && debugflag) {
-    console("dispatcher(): started.\n");
-  }
+ 
 
   /* Dispatch is called for the first time by start1() */
   if (Current == NULL) {
@@ -487,10 +477,6 @@ int zap(int pid) {
 
   /* Make sure kernel is active */
   kernelChecker();
-
-  if (DEBUG && debugflag) {
-    console("zap(): Process %s is disabling interrupts.\n", Current -> name);
-  }
   disableInterrupts();
 
   /* Process tried to zap itself*/
@@ -659,9 +645,7 @@ void addToReadyList(proc_ptr proc) {
 
 /* remove process from ready list */
 void popFromReadyList(proc_ptr proc) {
-  if (DEBUG && debugflag) {
-    console("popFromReadyList(): Removing process %s from Ready list\n", proc -> name);
-  }
+
   /* Process is head of ready list */
   if (proc == ReadyList) {
     ReadyList = ReadyList -> next_proc_ptr;
@@ -674,9 +658,7 @@ void popFromReadyList(proc_ptr proc) {
     temp -> next_proc_ptr = temp -> next_proc_ptr -> next_proc_ptr;
   }
 
-  if (DEBUG && debugflag) {
-    console("popFromReadyList(): Removed process %s from Ready List", proc -> name);
-  }
+
 
 } /* popFromReadyList */
 
